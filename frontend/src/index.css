@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #f0f0fe;
+  --color-primary-100: #e2e2fd;
+  --color-primary-200: #c9c9fb;
+  --color-primary-300: #a3a4f8;
+  --color-primary-400: #7879f3;
+  --color-primary-500: #5B5CEB;
+  --color-primary-600: #494ad6;
+  --color-primary-700: #3c3cb4;
+  --color-primary-800: #323294;
+  --color-primary-900: #2c2c77;
+
+  --color-success-500: #10B981;
+  --color-warning-500: #F59E0B;
+  --color-danger-500: #EF4444;
+
+  --color-bg-base: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-border-base: #E5E7EB;
+  --color-text-main: #0F172A;
+}
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Premium SaaS Cards & Panel Surfaces with 24px (rounded-3xl) radius */
+.saas-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb; /* border-slate-200 */
+  border-radius: 24px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .saas-card {
+  background: #0f172a; /* slate-900 */
+  border: 1px solid #1e293b; /* slate-800 */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+}
+
+.saas-card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+.dark .saas-card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+}
+
+/* Retrofit legacy .glass helper class for compatibility */
+.glass {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+}
+
+/* Premium SaaS Inputs (Linear & Stripe inspired) */
+.saas-input {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  color: #0f172a;
+  font-size: 0.875rem;
+  transition: all 0.2s ease-in-out;
+  padding: 0.75rem 1rem;
+}
+
+.saas-input:focus {
+  border-color: #5B5CEB;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(91, 92, 235, 0.12);
+}
+
+.dark .saas-input {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.dark .saas-input:focus {
+  border-color: #5B5CEB;
+  box-shadow: 0 0 0 4px rgba(91, 92, 235, 0.2);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
