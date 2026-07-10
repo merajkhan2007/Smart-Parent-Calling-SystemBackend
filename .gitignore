@@ -1,5 +1,8 @@
 # Version control ignore rules for Smart Parent Calling System (SPCS)
 
+# Entire Frontend Directory (since only backend is uploaded to this repo)
+frontend/
+
 # Virtual Environments
 backend/venv/
 venv/
@@ -19,15 +22,8 @@ backend/.pytest_cache/
 # Local Environment Credentials
 **/.env
 backend/.env
-frontend/.env
 **/.env.local
 **/.env.production
-
-# Node / Frontend Build
-frontend/node_modules/
-node_modules/
-frontend/dist/
-dist/
 
 # OS/IDE files
 .DS_Store
