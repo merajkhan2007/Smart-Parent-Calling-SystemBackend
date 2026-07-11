@@ -1,0 +1,13 @@
+# Required Arduino Libraries for StudentParentCalling
+
+# 1. RFID RC522 Library
+MFRC522 (by githuby / community version)
+
+# 2. Display Libraries
+Adafruit SSD1306 (by Adafruit)
+Adafruit GFX Library (by Adafruit)
+Adafruit BusIO (Required dependency for Adafruit SSD1306)
+
+# 3. Built-in Core Libraries (Pre-installed with ESP32 board support packages)
+SPI (For RFID SPI communication)
+Wire (For OLED I2C communication)
