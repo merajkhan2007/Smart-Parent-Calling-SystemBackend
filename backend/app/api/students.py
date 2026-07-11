@@ -7,12 +7,12 @@ from typing import Any, List, Optional, Dict
 
 from app.core.database import get_db
 from app.crud import db_crud
-from app.schemas.schemas import StudentOut, StudentCreate, StudentUpdate, UserOut
+from app.schemas.schemas import StudentOut, StudentCreate, StudentUpdate, UserOut, StudentListOut
 from app.api.auth import get_current_active_user, check_role
 
 router = APIRouter()
 
-@router.get("/", response_model=Dict[str, Any])
+@router.get("/", response_model=StudentListOut)
 def read_students(
     query: Optional[str] = None,
     class_name: Optional[str] = None,

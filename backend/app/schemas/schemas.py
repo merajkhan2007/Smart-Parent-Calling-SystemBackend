@@ -314,3 +314,21 @@ class CallStats(BaseModel):
     status_distribution: List[ChartDataPoint]
     most_active_students: List[Dict[str, Any]]
     call_duration_average: float
+
+class StudentListOut(BaseModel):
+    students: List[StudentOut]
+    total: int
+    page: int
+    limit: int
+
+    class Config:
+        from_attributes = True
+
+class CallLogListOut(BaseModel):
+    calls: List[CallLogOut]
+    total: int
+    page: int
+    limit: int
+
+    class Config:
+        from_attributes = True

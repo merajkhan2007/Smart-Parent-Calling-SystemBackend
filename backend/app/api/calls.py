@@ -9,13 +9,13 @@ from fastapi.responses import StreamingResponse
 
 from app.core.database import get_db
 from app.crud import db_crud
-from app.schemas.schemas import CallLogOut, CallStartRequest, CallConnectedRequest, CallEndRequest, UserOut
+from app.schemas.schemas import CallLogOut, CallStartRequest, CallConnectedRequest, CallEndRequest, UserOut, CallLogListOut
 from app.api.auth import get_current_active_user, check_role
 from app.core.websockets import manager
 
 router = APIRouter()
 
-@router.get("/", response_model=Dict[str, Any])
+@router.get("/", response_model=CallLogListOut)
 def read_call_logs(
     student_query: Optional[str] = None,
     device_id: Optional[str] = None,
