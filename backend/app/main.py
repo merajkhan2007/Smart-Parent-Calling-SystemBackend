@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.database import engine, get_db, Base
 from app.core.websockets import manager
 from app.crud import db_crud
-from app.api import auth, students, parents, rfid, devices, calls, reports, settings as settings_api, notifications
+from app.api import auth, students, parents, rfid, devices, calls, reports, settings as settings_api, notifications, users
 
 # Initialize tables
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.add_middleware(
 
 # Mount core routers
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])
+app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["Users"])
 app.include_router(students.router, prefix=f"{settings.API_V1_STR}/students", tags=["Students"])
 app.include_router(parents.router, prefix=f"{settings.API_V1_STR}/parents", tags=["Parents"])
 app.include_router(rfid.router, prefix=f"{settings.API_V1_STR}/rfid", tags=["RFID"])

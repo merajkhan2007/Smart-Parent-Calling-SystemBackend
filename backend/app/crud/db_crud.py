@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from app.models.database_models import (
     User, Role, Permission, Student, Parent, RfidCard, Device, CallLog, Attendance, Setting, Notification, AuditLog
 )
-from app.schemas.schemas import StudentCreate, StudentUpdate, UserCreate, ParentCreate, DeviceRegisterRequest, DeviceHeartbeatRequest
+from app.schemas.schemas import StudentCreate, StudentUpdate, UserCreate, UserUpdate, ParentCreate, DeviceRegisterRequest, DeviceHeartbeatRequest
 from app.core.security import get_password_hash
 
 # --- AUTH & USER CRUD ---
@@ -29,6 +29,31 @@ def create_user(db: Session, user: UserCreate) -> User:
     db.commit()
     db.refresh(db_user)
     return db_user
+
+def get_users(db: Session) -> List[User]:
+    return db.query(User).all()
+
+def update_user(db: Session, db_user: User, user_in: UserUpdate) -> User:
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "password" in update_data:
+        password = update_data.pop("password")
+        if password:
+            db_user.hashed_password = get_password_hash(password)
+            
+    for field, val in update_data.items():
+        setattr(db_user, field, val)
+        
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def delete_user(db: Session, user_id: int) -> bool:
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        return False
+    db.delete(db_user)
+    db.commit()
+    return True
 
 # --- STUDENT CRUD ---
 def get_student(db: Session, student_id: int) -> Optional[Student]:
