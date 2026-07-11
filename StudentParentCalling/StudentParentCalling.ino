@@ -59,7 +59,7 @@ uint32_t lastHeartbeatTime = 0;
 uint32_t callStartTimer = 0;
 
 // State transition duration constants
-const uint32_t STATUS_CHECK_INTERVAL = 5000;  // Check cellular status every 5 seconds
+const uint32_t STATUS_CHECK_INTERVAL = 30000; // Check cellular status every 30 seconds
 const uint32_t HEARTBEAT_INTERVAL    = 30000; // Send heartbeat to dashboard every 30 seconds
 const uint32_t VERIFY_DELAY          = 2000;  // Show card verified screen for 2s
 const uint32_t CALL_DURATION         = 20000; // Maintain parent call for 20s
@@ -343,8 +343,8 @@ void loop() {
                 break;
             }
 
-            // 2. Check if call is still active every 1000ms
-            if (millis() - lastCallCheck >= 1000) {
+            // 2. Check if call is still active every 1000ms (after an 8-second dialing grace period)
+            if (millis() - stateTimer >= 8000 && millis() - lastCallCheck >= 1000) {
                 lastCallCheck = millis();
                 if (!modem.isCallActive()) {
                     Serial.println("[Call] Call disconnected by parent/modem.");
