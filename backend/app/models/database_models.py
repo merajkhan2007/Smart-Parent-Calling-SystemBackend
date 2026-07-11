@@ -95,7 +95,7 @@ class Student(Base):
     
     parent = relationship("Parent", back_populates="students")
     rfid_card = relationship("RfidCard", back_populates="student")
-    call_logs = relationship("CallLog", back_populates="student")
+    call_logs = relationship("CallLog", back_populates="student", cascade="all, delete-orphan")
     attendance = relationship("Attendance", back_populates="student", cascade="all, delete-orphan")
 
 class Device(Base):
