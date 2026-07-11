@@ -6,7 +6,7 @@ import json
 
 from app.core.database import get_db
 from app.crud import db_crud
-from app.schemas.schemas import RfidCardOut, RfidAssignRequest, UserOut
+from app.schemas.schemas import RfidCardOut, RfidAssignRequest, UserOut, RfidCardUpdate
 from app.api.auth import get_current_active_user, check_role
 from app.core.websockets import manager
 
@@ -205,3 +205,62 @@ def read_scan_history(
             "status": h.status
         })
     return results
+
+@router.put("/{card_id}", response_model=RfidCardOut)
+def update_rfid_card(
+    card_id: int,
+    card_in: RfidCardUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
+) -> Any:
+    """
+    Update RFID Card parameters (UID or status).
+    If status is set to deactivated, unassign from student.
+    """
+    card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="RFID Card not found")
+        
+    update_data = card_in.model_dump(exclude_unset=True)
+    if "uid" in update_data:
+        # Check if another card already has this UID
+        dup = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == update_data["uid"], db_crud.RfidCard.id != card_id).first()
+        if dup:
+            raise HTTPException(status_code=400, detail="RFID Card UID already exists")
+        card.uid = update_data["uid"]
+        
+    if "status" in update_data:
+        card.status = update_data["status"]
+        if update_data["status"] == "deactivated":
+            # Unassign from student
+            student = db.query(db_crud.Student).filter(db_crud.Student.rfid_card_id == card.id).first()
+            if student:
+                student.rfid_card_id = None
+                
+    db.commit()
+    db.refresh(card)
+    db_crud.log_audit(db, user_id=current_user.id, action="UPDATE_RFID_CARD", details=f"Updated RFID Card ID {card_id}")
+    return card
+
+@router.delete("/{card_id}", status_code=status.HTTP_200_OK)
+def delete_rfid_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(check_role(["Super Admin"]))
+) -> Any:
+    """
+    Delete / deregister an RFID card completely.
+    """
+    card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="RFID Card not found")
+        
+    # Unassign from student if assigned
+    student = db.query(db_crud.Student).filter(db_crud.Student.rfid_card_id == card_id).first()
+    if student:
+        student.rfid_card_id = None
+        
+    db.delete(card)
+    db.commit()
+    db_crud.log_audit(db, user_id=current_user.id, action="DELETE_RFID_CARD", details=f"Deleted RFID Card ID {card_id}")
+    return {"message": "RFID Card successfully deleted"}

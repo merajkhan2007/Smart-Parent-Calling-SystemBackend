@@ -103,6 +103,10 @@ class RfidCardBase(BaseModel):
 class RfidCardCreate(RfidCardBase):
     pass
 
+class RfidCardUpdate(BaseModel):
+    uid: Optional[str] = None
+    status: Optional[str] = None
+
 class RfidCardOut(RfidCardBase):
     id: int
     assigned_at: datetime
