@@ -39,6 +39,7 @@ public:
     void completedScreen();
     void deniedScreen();
     void errorScreen(const char* errorMsg);
+    void loadingScreen(const char* msg);
 
     // Core Drawing Helpers
     void drawPhone(int x, int y);

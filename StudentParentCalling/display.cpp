@@ -298,3 +298,13 @@ void Display::loadingAnimation(int y, int delayMs) {
         delay(delayMs);
     }
 }
+
+/**
+ * @brief Display a loading message screen.
+ */
+void Display::loadingScreen(const char* msg) {
+    oled.clearDisplay();
+    drawCenteredText("SYSTEM SETUP", 15, 1);
+    drawCenteredText(msg, 38, 1);
+    oled.display();
+}

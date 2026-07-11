@@ -9,8 +9,8 @@
 // ==========================================
 // CONFIGURATION PARAMETERS (EDIT FOR YOUR SETUP)
 // ==========================================
-#define WIFI_SSID       "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID       "SHADAAN"
+#define WIFI_PASSWORD   "Makfreelance@759"
 #define API_BASE_URL    "https://m9vtp9i2sl5xk7n28lktek4e.141.148.199.81.sslip.io/api"
 #define DEVICE_ID       "ESP32_MAIN_GATE"
 #define DEVICE_NAME     "Entrance Gate A Scanner"
@@ -203,7 +203,7 @@ void loop() {
                 if (scanOk) {
                     currentState = STATE_VERIFYING;
                     stateTimer = millis();
-                    displayCtrl.verifiedScreen(activeStudentName);
+                    displayCtrl.verifiedScreen(activeStudentName.c_str());
                 } else {
                     Serial.println("[RFID] Access Denied: Card unknown, student blocked, or server error.");
                     currentState = STATE_DENIED;
@@ -234,7 +234,7 @@ void loop() {
                 if (activeStudentName.length() > 0) {
                     currentState = STATE_SELECT_PARENT;
                     stateTimer = millis();
-                    displayCtrl.selectParentScreen(activeStudentName);
+                    displayCtrl.selectParentScreen(activeStudentName.c_str());
                 } else {
                     currentState = STATE_WAITING;
                     lastStatusCheck = 0; // Force immediate display update
@@ -249,7 +249,7 @@ void loop() {
                 Serial.print("[Call] Initiating voice call to Father: ");
                 Serial.println(activeFatherNumber);
                 
-                displayCtrl.callingScreen(activeStudentName, activeFatherName, activeFatherNumber);
+                displayCtrl.callingScreen(activeStudentName.c_str(), activeFatherName.c_str(), activeFatherNumber.c_str());
                 
                 // Log call start to backend
                 if (WiFi.status() == WL_CONNECTED) {
@@ -282,7 +282,7 @@ void loop() {
                 Serial.print("[Call] Initiating voice call to Mother: ");
                 Serial.println(activeMotherNumber);
                 
-                displayCtrl.callingScreen(activeStudentName, activeMotherName, activeMotherNumber);
+                displayCtrl.callingScreen(activeStudentName.c_str(), activeMotherName.c_str(), activeMotherNumber.c_str());
                 
                 // Log call start to backend
                 if (WiFi.status() == WL_CONNECTED) {
