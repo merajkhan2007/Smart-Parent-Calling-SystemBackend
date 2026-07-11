@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Dict
 
 from app.core.database import get_db
 from app.crud import db_crud
-from app.schemas.schemas import DeviceOut, DeviceRegisterRequest, DeviceHeartbeatRequest, DeviceLogRequest, UserOut
+from app.schemas.schemas import DeviceOut, DeviceRegisterRequest, DeviceHeartbeatRequest, DeviceLogRequest, UserOut, DeviceUpdate
 from app.api.auth import get_current_active_user, check_role
 from app.core.websockets import manager
 
@@ -131,3 +131,41 @@ def get_all_device_status(
         "offline_count": offline,
         "devices": devices
     }
+
+@router.put("/{device_id}", response_model=DeviceOut)
+def update_device(
+    device_id: str,
+    device_in: DeviceUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
+) -> Any:
+    """
+    Update device parameters (name, location, classroom). Restricted to Super Admin & School Admin.
+    """
+    device = db.query(db_crud.Device).filter(db_crud.Device.device_id == device_id).first()
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found"
+        )
+    updated_device = db_crud.update_device(db, db_device=device, device_in=device_in)
+    db_crud.log_audit(db, user_id=current_user.id, action="DEVICE_UPDATE", details=f"Updated device: {device_id}")
+    return updated_device
+
+@router.delete("/{device_id}", status_code=status.HTTP_200_OK)
+def delete_device(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(check_role(["Super Admin"]))
+) -> Any:
+    """
+    Deregister / Delete a device. Restricted to Super Admin.
+    """
+    success = db_crud.delete_device(db, device_id=device_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found"
+        )
+    db_crud.log_audit(db, user_id=current_user.id, action="DEVICE_DELETE", details=f"Deregistered device: {device_id}")
+    return {"message": "Device successfully deregistered"}
