@@ -8,7 +8,7 @@
 #include "students.h"
 
 // ==========================================
-// CONFIGURATION PARAMETERS (EDIT FOR YOUR SETUP)
+// CONFIGURATION PARAMETERS
 // ==========================================
 #define WIFI_SSID       "SHADAAN"
 #define WIFI_PASSWORD   "Makfreelance@759"
@@ -130,8 +130,6 @@ void setup() {
     // 5. Initialize RFID Reader MFRC522
     SPI.begin(); // Uses default VSPI pins SCK (18), MISO (19), MOSI (23), SS (5)
     mfrc522.PCD_Init();
-    mfrc522.PCD_WriteRegister(mfrc522.TxControlReg, 0x03); // Force Antenna Transmitter ON
-    mfrc522.PCD_WriteRegister(mfrc522.RFCfgReg, (0x07<<4)); // Set receiver gain to maximum (48dB)
     
     byte rfidVer = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
     if (rfidVer == 0x00 || rfidVer == 0xFF) {
@@ -162,19 +160,15 @@ void setup() {
  * @brief Main execution loop. Implements non-blocking state transitions.
  */
 void loop() {
-    static uint32_t lastDebugTime = 0;
-    if (millis() - lastDebugTime >= 5000) {
-        lastDebugTime = millis();
-        byte txControl = mfrc522.PCD_ReadRegister(mfrc522.TxControlReg);
-        Serial.print("[RFID Debug] Main loop running. Antenna TxControl: 0x");
-        Serial.println(txControl, HEX);
-    }
-
-    // Keep WiFi connection alive in background
+    // Keep WiFi connection alive in background (throttled to every 10 seconds to avoid flooding the CPU and freezing SPI)
+    static uint32_t lastWifiReconnectAttempt = 0;
     if (WiFi.status() != WL_CONNECTED && isOnline) {
-        Serial.println("[WiFi] Disconnected! Attempting to reconnect...");
-        WiFi.disconnect();
-        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        if (millis() - lastWifiReconnectAttempt >= 10000) {
+            lastWifiReconnectAttempt = millis();
+            Serial.println("[WiFi] Disconnected! Attempting to reconnect...");
+            WiFi.disconnect();
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        }
     }
 
     // Background Non-blocking Heartbeat (updates dashboard every 30s)
@@ -188,20 +182,7 @@ void loop() {
         
         case STATE_WAITING: {
             // 1. Poll the RFID card reader FIRST (highest priority, non-blocking)
-            bool cardDetected = false;
-            if (mfrc522.PICC_IsNewCardPresent()) {
-                if (mfrc522.PICC_ReadCardSerial()) {
-                    cardDetected = true;
-                }
-            }
-            if (!cardDetected) {
-                // Secondary check: bypass IsNewCardPresent check (common issue on clone/counterfeit 0x82 chips)
-                if (mfrc522.PICC_ReadCardSerial()) {
-                    cardDetected = true;
-                }
-            }
-
-            if (cardDetected) {
+            if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
                 String scannedUid = getUIDString(mfrc522);
                 Serial.print("[RFID] Scanned Card UID: ");
                 Serial.println(scannedUid);
