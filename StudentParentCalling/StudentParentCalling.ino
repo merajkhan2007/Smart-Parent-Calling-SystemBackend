@@ -178,7 +178,20 @@ void loop() {
         
         case STATE_WAITING: {
             // 1. Poll the RFID card reader FIRST (highest priority, non-blocking)
-            if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+            bool cardDetected = false;
+            if (mfrc522.PICC_IsNewCardPresent()) {
+                if (mfrc522.PICC_ReadCardSerial()) {
+                    cardDetected = true;
+                }
+            }
+            if (!cardDetected) {
+                // Secondary check: bypass IsNewCardPresent check (common issue on clone/counterfeit 0x82 chips)
+                if (mfrc522.PICC_ReadCardSerial()) {
+                    cardDetected = true;
+                }
+            }
+
+            if (cardDetected) {
                 String scannedUid = getUIDString(mfrc522);
                 Serial.print("[RFID] Scanned Card UID: ");
                 Serial.println(scannedUid);
