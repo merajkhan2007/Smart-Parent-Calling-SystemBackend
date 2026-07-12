@@ -3,6 +3,9 @@ import requests
 import json
 import random
 
+# Local Development URL
+# BASE_URL = "http://localhost:8000/api"
+# Remote Server URL
 BASE_URL = "https://m9vtp9i2sl5xk7n28lktek4e.141.148.199.81.sslip.io/api"
 DEVICE_ID = "ESP32_MAIN_GATE"
 MOCK_RFIDS = ["RFID_001_ABC", "RFID_002_DEF", "RFID_005_MNO", "RFID_UNKNOWN_99"]
