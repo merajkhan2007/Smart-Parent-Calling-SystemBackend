@@ -130,6 +130,7 @@ void setup() {
     // 5. Initialize RFID Reader MFRC522
     SPI.begin(); // Uses default VSPI pins SCK (18), MISO (19), MOSI (23), SS (5)
     mfrc522.PCD_Init();
+    mfrc522.PCD_WriteRegister(mfrc522.TxControlReg, 0x03); // Force Antenna Transmitter ON
     
     byte rfidVer = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
     if (rfidVer == 0x00 || rfidVer == 0xFF) {
@@ -160,6 +161,14 @@ void setup() {
  * @brief Main execution loop. Implements non-blocking state transitions.
  */
 void loop() {
+    static uint32_t lastDebugTime = 0;
+    if (millis() - lastDebugTime >= 5000) {
+        lastDebugTime = millis();
+        byte txControl = mfrc522.PCD_ReadRegister(mfrc522.TxControlReg);
+        Serial.print("[RFID Debug] Main loop running. Antenna TxControl: 0x");
+        Serial.println(txControl, HEX);
+    }
+
     // Keep WiFi connection alive in background
     if (WiFi.status() != WL_CONNECTED && isOnline) {
         Serial.println("[WiFi] Disconnected! Attempting to reconnect...");
