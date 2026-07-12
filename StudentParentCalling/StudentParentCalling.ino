@@ -474,7 +474,10 @@ void sendHeartbeat(const String& statusMessage) {
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
-    String payload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"battery_status\":95,\"wifi_signal\":" + String(WiFi.RSSI()) + ",\"sim_network\":\"SIM7670 LTE\",\"current_status_message\":\"" + statusMessage + "\"}";
+    // Fetch latest cellular signal strength (in dBm)
+    currentDbm = modem.getSignal();
+    
+    String payload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"battery_status\":95,\"wifi_signal\":" + String(WiFi.RSSI()) + ",\"sim_network\":\"SIM7670 (" + String(currentDbm) + " dBm)\",\"current_status_message\":\"" + statusMessage + "\"}";
     
     int httpResponseCode = http.POST(payload);
     http.end();
