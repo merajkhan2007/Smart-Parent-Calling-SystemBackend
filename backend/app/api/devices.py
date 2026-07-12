@@ -183,13 +183,19 @@ def update_device(
 def delete_device(
     device_id: str,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(check_role(["Super Admin"]))
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
-    success = db_crud.delete_device(db, device_id=device_id)
-    if not success:
+    device = db.query(db_crud.Device).filter(db_crud.Device.device_id == device_id).first()
+    if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device not found"
         )
+
+    # Check school scope permission
+    if current_user.role.name != "Super Admin" and device.school_id != current_user.school_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this device")
+
+    db_crud.delete_device(db, device_id=device_id)
     db_crud.log_audit(db, user_id=current_user.id, action="DEVICE_DELETE", details=f"Deregistered device: {device_id}")
     return {"message": "Device successfully deregistered"}
