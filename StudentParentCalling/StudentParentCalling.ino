@@ -131,6 +131,7 @@ void setup() {
     SPI.begin(); // Uses default VSPI pins SCK (18), MISO (19), MOSI (23), SS (5)
     mfrc522.PCD_Init();
     mfrc522.PCD_WriteRegister(mfrc522.TxControlReg, 0x03); // Force Antenna Transmitter ON
+    mfrc522.PCD_WriteRegister(mfrc522.RFCfgReg, (0x07<<4)); // Set receiver gain to maximum (48dB)
     
     byte rfidVer = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
     if (rfidVer == 0x00 || rfidVer == 0xFF) {
