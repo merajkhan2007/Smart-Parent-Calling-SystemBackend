@@ -2,6 +2,20 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+# --- SCHOOL SCHEMAS ---
+class SchoolCreate(BaseModel):
+    name: str
+    logo_url: Optional[str] = None
+
+class SchoolOut(BaseModel):
+    id: int
+    name: str
+    logo_url: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # --- AUTH SCHEMAS ---
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -18,6 +32,7 @@ class Token(BaseModel):
     role: str
     email: str
     name: str
+    school_id: Optional[int] = None
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
@@ -46,6 +61,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     is_active: Optional[bool] = True
+    school_id: Optional[int] = None
 
 class UserCreate(UserBase):
     password: str
@@ -56,6 +72,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     password: Optional[str] = None
     role_id: Optional[int] = None
+    school_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 class UserOut(UserBase):
@@ -76,6 +93,7 @@ class ParentBase(BaseModel):
     guardian_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     emergency_contact: Optional[str] = None
+    school_id: Optional[int] = None
 
 class ParentCreate(ParentBase):
     pass
@@ -88,6 +106,7 @@ class ParentUpdate(BaseModel):
     guardian_name: Optional[str] = None
     guardian_mobile: Optional[str] = None
     emergency_contact: Optional[str] = None
+    school_id: Optional[int] = None
 
 class ParentOut(ParentBase):
     id: int
@@ -99,6 +118,7 @@ class ParentOut(ParentBase):
 class RfidCardBase(BaseModel):
     uid: str
     status: Optional[str] = "active"
+    school_id: Optional[int] = None
 
 class RfidCardCreate(RfidCardBase):
     pass
@@ -106,6 +126,7 @@ class RfidCardCreate(RfidCardBase):
 class RfidCardUpdate(BaseModel):
     uid: Optional[str] = None
     status: Optional[str] = None
+    school_id: Optional[int] = None
 
 class RfidCardOut(RfidCardBase):
     id: int
@@ -130,6 +151,7 @@ class StudentBase(BaseModel):
     dob: Optional[str] = None
     address: Optional[str] = None
     status: Optional[str] = "active"
+    school_id: Optional[int] = None
 
 class StudentCreate(StudentBase):
     parent: ParentCreate
@@ -147,6 +169,7 @@ class StudentUpdate(BaseModel):
     status: Optional[str] = None
     parent: Optional[ParentUpdate] = None
     rfid_uid: Optional[str] = None
+    school_id: Optional[int] = None
 
 class StudentOut(StudentBase):
     id: int
@@ -166,6 +189,7 @@ class DeviceBase(BaseModel):
     name: str
     location: Optional[str] = None
     classroom: Optional[str] = None
+    school_id: Optional[int] = None
 
 class DeviceCreate(DeviceBase):
     ip_address: Optional[str] = None
@@ -179,6 +203,7 @@ class DeviceUpdate(BaseModel):
     firmware_version: Optional[str] = None
     status: Optional[str] = None
     current_status_message: Optional[str] = None
+    school_id: Optional[int] = None
 
 class DeviceOut(DeviceBase):
     id: int
@@ -203,6 +228,7 @@ class DeviceRegisterRequest(BaseModel):
     firmware_version: Optional[str] = None
     location: Optional[str] = None
     classroom: Optional[str] = None
+    school_id: Optional[int] = None
 
 class DeviceHeartbeatRequest(BaseModel):
     device_id: str
@@ -222,6 +248,7 @@ class CallLogBase(BaseModel):
     parent_type: str
     phone_number: str
     device_id: Optional[int] = None
+    school_id: Optional[int] = None
 
 class CallLogOut(BaseModel):
     id: int
@@ -237,9 +264,7 @@ class CallLogOut(BaseModel):
     duration: int
     status: str
     reason: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+    school_id: Optional[int] = None
 
 class CallStartRequest(BaseModel):
     rfid_uid: str
@@ -279,6 +304,7 @@ class SettingsUpdate(BaseModel):
 class SettingsOut(SettingsBase):
     id: int
     logo_url: Optional[str] = None
+    school_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -290,6 +316,7 @@ class NotificationOut(BaseModel):
     message: str
     is_read: bool
     created_at: datetime
+    school_id: Optional[int] = None
 
     class Config:
         from_attributes = True

@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.database import engine, get_db, Base
 from app.core.websockets import manager
 from app.crud import db_crud
-from app.api import auth, students, parents, rfid, devices, calls, reports, settings as settings_api, notifications, users
+from app.api import auth, students, parents, rfid, devices, calls, reports, settings as settings_api, notifications, users, schools
 
 # Initialize tables
 Base.metadata.create_all(bind=engine)
@@ -43,6 +43,7 @@ app.include_router(calls.router, prefix=f"{settings.API_V1_STR}/call", tags=["Ca
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["Reports"])
 app.include_router(settings_api.router, prefix=f"{settings.API_V1_STR}/settings", tags=["Settings"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["Notifications"])
+app.include_router(schools.router, prefix=f"{settings.API_V1_STR}/schools", tags=["Schools"])
 
 # --- EXACT ESP32 REST API MAPPINGS ---
 

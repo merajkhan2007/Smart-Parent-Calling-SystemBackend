@@ -4,10 +4,51 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 
 from app.models.database_models import (
-    User, Role, Permission, Student, Parent, RfidCard, Device, CallLog, Attendance, Setting, Notification, AuditLog
+    School, User, Role, Permission, Student, Parent, RfidCard, Device, CallLog, Attendance, Setting, Notification, AuditLog
 )
 from app.schemas.schemas import StudentCreate, StudentUpdate, UserCreate, UserUpdate, ParentCreate, DeviceRegisterRequest, DeviceHeartbeatRequest, DeviceUpdate
 from app.core.security import get_password_hash
+
+# --- SCHOOL CRUD ---
+def get_school(db: Session, school_id: int) -> Optional[School]:
+    return db.query(School).filter(School.id == school_id).first()
+
+def get_school_by_name(db: Session, name: str) -> Optional[School]:
+    return db.query(School).filter(School.name == name).first()
+
+def get_schools(db: Session) -> List[School]:
+    return db.query(School).all()
+
+def create_school(db: Session, school_name: str, logo_url: str = None) -> School:
+    db_school = School(name=school_name, logo_url=logo_url)
+    db.add(db_school)
+    db.commit()
+    db.refresh(db_school)
+    
+    # Initialize default settings for the school
+    db_settings = Setting(
+        school_id=db_school.id,
+        school_name=school_name,
+        logo_url=logo_url,
+        working_hours_start="08:00",
+        working_hours_end="16:00",
+        max_calls_per_day=3,
+        max_call_duration=180,
+        emergency_contact="+1234567890",
+        allowed_calling_time_start="08:00",
+        allowed_calling_time_end="16:00"
+    )
+    db.add(db_settings)
+    db.commit()
+    return db_school
+
+def delete_school(db: Session, school_id: int) -> bool:
+    db_school = db.query(School).filter(School.id == school_id).first()
+    if not db_school:
+        return False
+    db.delete(db_school)
+    db.commit()
+    return True
 
 # --- AUTH & USER CRUD ---
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -23,6 +64,7 @@ def create_user(db: Session, user: UserCreate) -> User:
         hashed_password=hashed_pwd,
         full_name=user.full_name,
         role_id=user.role_id,
+        school_id=user.school_id,
         is_active=True
     )
     db.add(db_user)
@@ -30,8 +72,11 @@ def create_user(db: Session, user: UserCreate) -> User:
     db.refresh(db_user)
     return db_user
 
-def get_users(db: Session) -> List[User]:
-    return db.query(User).all()
+def get_users(db: Session, school_id: Optional[int] = None) -> List[User]:
+    q = db.query(User)
+    if school_id is not None:
+        q = q.filter(User.school_id == school_id)
+    return q.all()
 
 def update_user(db: Session, db_user: User, user_in: UserUpdate) -> User:
     update_data = user_in.model_dump(exclude_unset=True)
@@ -56,10 +101,14 @@ def delete_user(db: Session, user_id: int) -> bool:
     return True
 
 # --- STUDENT CRUD ---
-def get_student(db: Session, student_id: int) -> Optional[Student]:
-    return db.query(Student).filter(Student.id == student_id).first()
+def get_student(db: Session, student_id: int, school_id: Optional[int] = None) -> Optional[Student]:
+    q = db.query(Student).filter(Student.id == student_id)
+    if school_id is not None:
+        q = q.filter(Student.school_id == school_id)
+    return q.first()
 
 def get_student_by_rfid(db: Session, rfid_uid: str) -> Optional[Student]:
+    # Hardware checks: can search student globally (since device knows school_id)
     return db.query(Student).join(RfidCard).filter(RfidCard.uid == rfid_uid).first()
 
 def search_students(
@@ -68,10 +117,13 @@ def search_students(
     class_name: Optional[str] = None,
     section: Optional[str] = None,
     status: Optional[str] = None,
+    school_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100
 ) -> Tuple[List[Student], int]:
     db_query = db.query(Student)
+    if school_id is not None:
+        db_query = db_query.filter(Student.school_id == school_id)
     
     if query:
         search_filter = or_(
@@ -80,16 +132,18 @@ def search_students(
             Student.roll_number.ilike(f"%{query}%")
         )
         # Check if query matches parent father/mother name or mobile
-        parent_filter = Student.parent_id.in_(
-            db.query(Parent.id).filter(
-                or_(
-                    Parent.father_name.ilike(f"%{query}%"),
-                    Parent.mother_name.ilike(f"%{query}%"),
-                    Parent.father_mobile.ilike(f"%{query}%"),
-                    Parent.mother_mobile.ilike(f"%{query}%")
-                )
+        parent_query = db.query(Parent.id).filter(
+            or_(
+                Parent.father_name.ilike(f"%{query}%"),
+                Parent.mother_name.ilike(f"%{query}%"),
+                Parent.father_mobile.ilike(f"%{query}%"),
+                Parent.mother_mobile.ilike(f"%{query}%")
             )
         )
+        if school_id is not None:
+            parent_query = parent_query.filter(Parent.school_id == school_id)
+        
+        parent_filter = Student.parent_id.in_(parent_query)
         db_query = db_query.filter(or_(search_filter, parent_filter))
         
     if class_name:
@@ -112,7 +166,8 @@ def create_student(db: Session, student_in: StudentCreate) -> Student:
         mother_mobile=student_in.parent.mother_mobile,
         guardian_name=student_in.parent.guardian_name,
         guardian_mobile=student_in.parent.guardian_mobile,
-        emergency_contact=student_in.parent.emergency_contact
+        emergency_contact=student_in.parent.emergency_contact,
+        school_id=student_in.school_id
     )
     db.add(db_parent)
     db.commit()
@@ -124,10 +179,13 @@ def create_student(db: Session, student_in: StudentCreate) -> Student:
         # Check if already exists
         rfid_card = db.query(RfidCard).filter(RfidCard.uid == student_in.rfid_uid).first()
         if not rfid_card:
-            rfid_card = RfidCard(uid=student_in.rfid_uid, status="active")
+            rfid_card = RfidCard(uid=student_in.rfid_uid, status="active", school_id=student_in.school_id)
             db.add(rfid_card)
             db.commit()
             db.refresh(rfid_card)
+        else:
+            rfid_card.school_id = student_in.school_id
+            db.commit()
         rfid_card_id = rfid_card.id
         
     # 3. Create Student
@@ -142,7 +200,8 @@ def create_student(db: Session, student_in: StudentCreate) -> Student:
         address=student_in.address,
         parent_id=db_parent.id,
         rfid_card_id=rfid_card_id,
-        status=student_in.status or "active"
+        status=student_in.status or "active",
+        school_id=student_in.school_id
     )
     db.add(db_student)
     db.commit()
@@ -164,7 +223,7 @@ def update_student(db: Session, student_id: int, student_in: StudentUpdate) -> O
             # Check if this rfid exists
             rfid_card = db.query(RfidCard).filter(RfidCard.uid == rfid_uid).first()
             if not rfid_card:
-                rfid_card = RfidCard(uid=rfid_uid, status="active")
+                rfid_card = RfidCard(uid=rfid_uid, status="active", school_id=db_student.school_id)
                 db.add(rfid_card)
                 db.commit()
                 db.refresh(rfid_card)
@@ -208,8 +267,14 @@ def delete_student(db: Session, student_id: int) -> bool:
 def get_rfid_card(db: Session, uid: str) -> Optional[RfidCard]:
     return db.query(RfidCard).filter(RfidCard.uid == uid).first()
 
-def create_rfid_card(db: Session, uid: str) -> RfidCard:
-    db_card = RfidCard(uid=uid, status="active")
+def get_rfid_cards(db: Session, school_id: Optional[int] = None) -> List[RfidCard]:
+    q = db.query(RfidCard)
+    if school_id is not None:
+        q = q.filter(RfidCard.school_id == school_id)
+    return q.all()
+
+def create_rfid_card(db: Session, uid: str, school_id: Optional[int] = None) -> RfidCard:
+    db_card = RfidCard(uid=uid, status="active", school_id=school_id)
     db.add(db_card)
     db.commit()
     db.refresh(db_card)
@@ -227,6 +292,7 @@ def register_device(db: Session, req: DeviceRegisterRequest) -> Device:
             firmware_version=req.firmware_version,
             location=req.location,
             classroom=req.classroom,
+            school_id=req.school_id,
             status="online",
             last_seen=datetime.utcnow()
         )
@@ -238,6 +304,7 @@ def register_device(db: Session, req: DeviceRegisterRequest) -> Device:
         if req.firmware_version: db_device.firmware_version = req.firmware_version
         if req.location: db_device.location = req.location
         if req.classroom: db_device.classroom = req.classroom
+        if req.school_id is not None: db_device.school_id = req.school_id
         db_device.status = "online"
         db_device.last_seen = datetime.utcnow()
     db.commit()
@@ -266,6 +333,12 @@ def update_device(db: Session, db_device: Device, device_in: DeviceUpdate) -> De
     db.refresh(db_device)
     return db_device
 
+def get_devices(db: Session, school_id: Optional[int] = None) -> List[Device]:
+    q = db.query(Device)
+    if school_id is not None:
+        q = q.filter(Device.school_id == school_id)
+    return q.all()
+
 def delete_device(db: Session, device_id: str) -> bool:
     db_device = db.query(Device).filter(Device.device_id == device_id).first()
     if not db_device:
@@ -275,12 +348,13 @@ def delete_device(db: Session, device_id: str) -> bool:
     return True
 
 # --- CALL ACTIONS CRUD ---
-def create_call_log(db: Session, student_id: int, parent_type: str, phone_number: str, device_db_id: Optional[int]) -> CallLog:
+def create_call_log(db: Session, student_id: int, parent_type: str, phone_number: str, device_db_id: Optional[int], school_id: Optional[int] = None) -> CallLog:
     db_call = CallLog(
         student_id=student_id,
         parent_type=parent_type,
         phone_number=phone_number,
         device_id=device_db_id,
+        school_id=school_id,
         call_start=datetime.utcnow(),
         status="started"
     )
@@ -290,22 +364,31 @@ def create_call_log(db: Session, student_id: int, parent_type: str, phone_number
     return db_call
 
 # --- SYSTEM SETTINGS ---
-def get_settings(db: Session) -> Setting:
-    settings = db.query(Setting).first()
+def get_settings(db: Session, school_id: Optional[int] = None) -> Setting:
+    q = db.query(Setting)
+    if school_id is not None:
+        q = q.filter(Setting.school_id == school_id)
+    settings = q.first()
     if not settings:
-        settings = Setting()
+        settings = Setting(school_id=school_id)
         db.add(settings)
         db.commit()
         db.refresh(settings)
     return settings
 
 # --- NOTIFICATIONS CRUD ---
-def create_notification(db: Session, notif_type: str, message: str) -> Notification:
-    db_notif = Notification(type=notif_type, message=message, is_read=False)
+def create_notification(db: Session, notif_type: str, message: str, school_id: Optional[int] = None) -> Notification:
+    db_notif = Notification(type=notif_type, message=message, school_id=school_id, is_read=False)
     db.add(db_notif)
     db.commit()
     db.refresh(db_notif)
     return db_notif
+
+def get_notifications(db: Session, school_id: Optional[int] = None) -> List[Notification]:
+    q = db.query(Notification)
+    if school_id is not None:
+        q = q.filter(Notification.school_id == school_id)
+    return q.order_by(Notification.created_at.desc()).all()
 
 # --- AUDIT LOGS CRUD ---
 def log_audit(db: Session, user_id: Optional[int], action: str, details: str = None):
@@ -314,42 +397,67 @@ def log_audit(db: Session, user_id: Optional[int], action: str, details: str = N
     db.commit()
 
 # --- STATISTICS & DASHBOARD DATA ---
-def get_dashboard_stats(db: Session) -> Dict[str, Any]:
+def get_dashboard_stats(db: Session, school_id: Optional[int] = None) -> Dict[str, Any]:
     today_start = datetime.combine(date.today(), datetime.min.time())
-    today_end = datetime.combine(date.today(), datetime.max.time())
     
-    total_students = db.query(Student).count()
+    total_students_query = db.query(Student)
+    if school_id is not None:
+        total_students_query = total_students_query.filter(Student.school_id == school_id)
+    total_students = total_students_query.count()
     
     # Calls today
     today_calls_query = db.query(CallLog).filter(CallLog.call_start >= today_start)
+    if school_id is not None:
+        today_calls_query = today_calls_query.filter(CallLog.school_id == school_id)
+        
     today_calls = today_calls_query.count()
     successful_calls = today_calls_query.filter(CallLog.status == "completed").count()
     rejected_calls = today_calls_query.filter(CallLog.status.in_(["failed", "rejected", "missed"])).count()
     
     # Call duration today
-    call_duration_today = db.query(func.sum(CallLog.duration)).filter(
+    call_duration_query = db.query(func.sum(CallLog.duration)).filter(
         CallLog.call_start >= today_start, CallLog.status == "completed"
-    ).scalar() or 0
+    )
+    if school_id is not None:
+        call_duration_query = call_duration_query.filter(CallLog.school_id == school_id)
+    call_duration_today = call_duration_query.scalar() or 0
     
     # Scans today
-    scans_today = db.query(Attendance).filter(Attendance.check_in_time >= today_start).count()
+    attendance_query = db.query(Attendance).join(Student).filter(Attendance.check_in_time >= today_start)
+    if school_id is not None:
+        attendance_query = attendance_query.filter(Student.school_id == school_id)
+    scans_today = attendance_query.count()
     
     # Devices online/offline
-    # Automatically check and mark devices offline if last_seen is older than 2 minutes
     heartbeat_cutoff = datetime.utcnow() - timedelta(minutes=2)
-    db.query(Device).filter(Device.last_seen < heartbeat_cutoff, Device.status == "online").update({"status": "offline", "current_status_message": "Offline"})
+    device_update_q = db.query(Device).filter(Device.last_seen < heartbeat_cutoff, Device.status == "online")
+    if school_id is not None:
+        device_update_q = device_update_q.filter(Device.school_id == school_id)
+    device_update_q.update({"status": "offline", "current_status_message": "Offline"}, synchronize_session=False)
     db.commit()
     
-    online_devices = db.query(Device).filter(Device.status == "online").count()
-    offline_devices = db.query(Device).filter(Device.status == "offline").count()
+    online_device_q = db.query(Device).filter(Device.status == "online")
+    offline_device_q = db.query(Device).filter(Device.status == "offline")
+    if school_id is not None:
+        online_device_q = online_device_q.filter(Device.school_id == school_id)
+        offline_device_q = offline_device_q.filter(Device.school_id == school_id)
+        
+    online_devices = online_device_q.count()
+    offline_devices = offline_device_q.count()
     
     # Recent Calls (latest 5)
-    recent_calls = db.query(CallLog).order_by(CallLog.call_start.desc()).limit(5).all()
+    recent_calls_q = db.query(CallLog).order_by(CallLog.call_start.desc())
+    if school_id is not None:
+        recent_calls_q = recent_calls_q.filter(CallLog.school_id == school_id)
+    recent_calls = recent_calls_q.limit(5).all()
     
     # Timeline details
     timeline = []
     # Fetch today's call logs
-    today_logs = db.query(CallLog).filter(CallLog.call_start >= today_start).order_by(CallLog.call_start.desc()).limit(10).all()
+    today_logs_q = db.query(CallLog).filter(CallLog.call_start >= today_start).order_by(CallLog.call_start.desc())
+    if school_id is not None:
+        today_logs_q = today_logs_q.filter(CallLog.school_id == school_id)
+    today_logs = today_logs_q.limit(10).all()
     for log in today_logs:
         timeline.append({
             "id": f"call_{log.id}",
@@ -361,7 +469,10 @@ def get_dashboard_stats(db: Session) -> Dict[str, Any]:
         })
         
     # Fetch today's attendances
-    today_scans = db.query(Attendance).filter(Attendance.check_in_time >= today_start).order_by(Attendance.check_in_time.desc()).limit(10).all()
+    today_scans_q = db.query(Attendance).join(Student).filter(Attendance.check_in_time >= today_start).order_by(Attendance.check_in_time.desc())
+    if school_id is not None:
+        today_scans_q = today_scans_q.filter(Student.school_id == school_id)
+    today_scans = today_scans_q.limit(10).all()
     for scan in today_scans:
         timeline.append({
             "id": f"scan_{scan.id}",

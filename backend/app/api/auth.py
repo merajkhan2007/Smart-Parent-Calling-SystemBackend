@@ -70,7 +70,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "token_type": "bearer",
         "role": user.role.name,
         "email": user.email,
-        "name": user.full_name or user.email
+        "name": user.full_name or user.email,
+        "school_id": user.school_id
     }
 
 @router.post("/login-json", response_model=Token)
@@ -100,7 +101,8 @@ def login_json(req: LoginRequest, db: Session = Depends(get_db)) -> Any:
         "token_type": "bearer",
         "role": user.role.name,
         "email": user.email,
-        "name": user.full_name or user.email
+        "name": user.full_name or user.email,
+        "school_id": user.school_id
     }
 
 @router.post("/refresh", response_model=Token)
@@ -131,7 +133,8 @@ def refresh_token(refresh_token: str, db: Session = Depends(get_db)) -> Any:
         "token_type": "bearer",
         "role": user.role.name,
         "email": user.email,
-        "name": user.full_name or user.email
+        "name": user.full_name or user.email,
+        "school_id": user.school_id
     }
 
 @router.get("/me", response_model=UserOut)

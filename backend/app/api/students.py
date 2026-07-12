@@ -18,14 +18,20 @@ def read_students(
     class_name: Optional[str] = None,
     section: Optional[str] = None,
     status: Optional[str] = None,
+    school_id: Optional[int] = None,
     page: int = 1,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
+    # Resolve target school filter
+    target_school_id = school_id
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
     skip = (page - 1) * limit
     students, total = db_crud.search_students(
-        db, query=query, class_name=class_name, section=section, status=status, skip=skip, limit=limit
+        db, query=query, class_name=class_name, section=section, status=status, school_id=target_school_id, skip=skip, limit=limit
     )
     return {
         "students": students,
@@ -40,7 +46,11 @@ def read_student(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
-    student = db_crud.get_student(db, student_id=student_id)
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    student = db_crud.get_student(db, student_id=student_id, school_id=target_school_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     return student
@@ -51,6 +61,10 @@ def create_student(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
+    # Resolve and force creator's school_id
+    if current_user.role.name != "Super Admin":
+        student_in.school_id = current_user.school_id
+
     # Check if student admission number exists
     existing = db.query(db_crud.Student).filter(db_crud.Student.admission_number == student_in.admission_number).first()
     if existing:
@@ -67,11 +81,18 @@ def update_student(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin", "Teacher"]))
 ) -> Any:
-    student = db_crud.update_student(db, student_id=student_id, student_in=student_in)
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+        student_in.school_id = current_user.school_id
+
+    student = db_crud.get_student(db, student_id=student_id, school_id=target_school_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+
+    updated = db_crud.update_student(db, student_id=student_id, student_in=student_in)
     db_crud.log_audit(db, user_id=current_user.id, action="UPDATE_STUDENT", details=f"Updated student ID {student_id}")
-    return student
+    return updated
 
 @router.delete("/{student_id}", status_code=status.HTTP_200_OK)
 def delete_student(
@@ -79,9 +100,15 @@ def delete_student(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
-    success = db_crud.delete_student(db, student_id=student_id)
-    if not success:
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    student = db_crud.get_student(db, student_id=student_id, school_id=target_school_id)
+    if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+
+    db_crud.delete_student(db, student_id=student_id)
     db_crud.log_audit(db, user_id=current_user.id, action="DELETE_STUDENT", details=f"Deleted student ID {student_id}")
     return {"message": "Student successfully deleted"}
 
@@ -91,7 +118,10 @@ def export_students_excel(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ):
-    students = db.query(db_crud.Student).all()
+    q = db.query(db_crud.Student)
+    if current_user.role.name != "Super Admin":
+        q = q.filter(db_crud.Student.school_id == current_user.school_id)
+    students = q.all()
     
     data = []
     for s in students:
@@ -153,6 +183,11 @@ def import_students_excel(
             if col not in df.columns:
                 raise HTTPException(status_code=400, detail=f"Missing required column: {col}")
                 
+        # Resolve target school_id for imports
+        target_school_id = None
+        if current_user.role.name != "Super Admin":
+            target_school_id = current_user.school_id
+
         imported_count = 0
         for index, row in df.iterrows():
             adm_num = str(row["Admission Number"]).strip()
@@ -166,7 +201,8 @@ def import_students_excel(
                 father_name=str(row["Father Name"]).strip(),
                 father_mobile=str(row["Father Mobile"]).strip(),
                 mother_name=str(row["Mother Name"]).strip(),
-                mother_mobile=str(row["Mother Mobile"]).strip()
+                mother_mobile=str(row["Mother Mobile"]).strip(),
+                school_id=target_school_id
             )
             db.add(db_parent)
             db.commit()
@@ -179,10 +215,13 @@ def import_students_excel(
                 if uid_str:
                     rfid_card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == uid_str).first()
                     if not rfid_card:
-                        rfid_card = db_crud.RfidCard(uid=uid_str, status="active")
+                        rfid_card = db_crud.RfidCard(uid=uid_str, status="active", school_id=target_school_id)
                         db.add(rfid_card)
                         db.commit()
                         db.refresh(rfid_card)
+                    else:
+                        rfid_card.school_id = target_school_id
+                        db.commit()
                     rfid_card_id = rfid_card.id
                     
             # Create Student
@@ -197,7 +236,8 @@ def import_students_excel(
                 address=str(row["Address"]).strip() if "Address" in df.columns and pd.notna(row["Address"]) else None,
                 parent_id=db_parent.id,
                 rfid_card_id=rfid_card_id,
-                status="active"
+                status="active",
+                school_id=target_school_id
             )
             db.add(db_student)
             db.commit()

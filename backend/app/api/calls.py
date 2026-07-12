@@ -23,14 +23,22 @@ def read_call_logs(
     class_name: Optional[str] = None,
     start_date: Optional[str] = None, # YYYY-MM-DD
     end_date: Optional[str] = None, # YYYY-MM-DD
+    school_id: Optional[int] = None,
     page: int = 1,
     limit: int = 15,
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
+    # Resolve target school context
+    target_school_id = school_id
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
     skip = (page - 1) * limit
     query = db.query(db_crud.CallLog).join(db_crud.Student)
     
+    if target_school_id is not None:
+        query = query.filter(db_crud.CallLog.school_id == target_school_id)
     if student_query:
         query = query.filter(db_crud.Student.name.ilike(f"%{student_query}%"))
     if device_id:
@@ -109,9 +117,10 @@ async def call_start(
     if not phone_number:
         raise HTTPException(status_code=400, detail=f"Phone number not set for {parent_type}")
         
-    # Find Device database ID
+    # Find Device database ID and School ID
     device = db.query(db_crud.Device).filter(db_crud.Device.device_id == req.device_id).first()
     device_db_id = device.id if device else None
+    school_id = device.school_id if device else None
     
     if device:
         device.current_status_message = "Calling"
@@ -125,7 +134,8 @@ async def call_start(
         student_id=student.id,
         parent_type=req.parent_type,
         phone_number=phone_number,
-        device_db_id=device_db_id
+        device_db_id=device_db_id,
+        school_id=school_id
     )
     
     # Broadcast to websocket
@@ -195,7 +205,7 @@ async def call_end(
     # Trigger notifications if failed
     if req.status in ["failed", "rejected"]:
         msg = f"Call failed for {db_call.student.name} to {db_call.parent_type}. Reason: {req.reason or 'None'}"
-        db_crud.create_notification(db, notif_type="call_failed", message=msg)
+        db_crud.create_notification(db, notif_type="call_failed", message=msg, school_id=db_call.school_id)
         
     await manager.broadcast({
         "event": "call_ended",
@@ -221,7 +231,11 @@ def export_calls_excel(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ):
-    calls = db.query(db_crud.CallLog).all()
+    q = db.query(db_crud.CallLog)
+    if current_user.role.name != "Super Admin":
+        q = q.filter(db_crud.CallLog.school_id == current_user.school_id)
+    calls = q.all()
+    
     data = []
     for c in calls:
         data.append({
@@ -259,9 +273,11 @@ def export_calls_pdf(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ):
-    # To avoid external heavy PDF libraries, we stream a beautifully structured CSV/HTML report
-    # representing the PDF export dataset.
-    calls = db.query(db_crud.CallLog).all()
+    q = db.query(db_crud.CallLog)
+    if current_user.role.name != "Super Admin":
+        q = q.filter(db_crud.CallLog.school_id == current_user.school_id)
+    calls = q.all()
+    
     csv_data = "Call ID,Student,Parent Type,Phone,Device,Start,Duration,Status\n"
     for c in calls:
         csv_data += f"{c.id},{c.student.name},{c.parent_type},{c.phone_number},{c.device.name if c.device else 'N/A'},{c.call_start.strftime('%Y-%m-%d %H:%M')},{c.duration},{c.status}\n"

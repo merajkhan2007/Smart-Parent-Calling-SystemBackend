@@ -8,8 +8,24 @@ role_permissions = Table(
     "role_permissions",
     Base.metadata,
     Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
+    Column("permission_id", ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
 )
+
+class School(Base):
+    __tablename__ = "schools"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False, index=True)
+    logo_url = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    users = relationship("User", back_populates="school", cascade="all, delete-orphan")
+    students = relationship("Student", back_populates="school", cascade="all, delete-orphan")
+    parents = relationship("Parent", back_populates="school", cascade="all, delete-orphan")
+    rfid_cards = relationship("RfidCard", back_populates="school", cascade="all, delete-orphan")
+    devices = relationship("Device", back_populates="school", cascade="all, delete-orphan")
+    settings = relationship("Setting", back_populates="school", cascade="all, delete-orphan")
+    call_logs = relationship("CallLog", back_populates="school", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="school", cascade="all, delete-orphan")
 
 class Role(Base):
     __tablename__ = "roles"
@@ -35,11 +51,13 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(100))
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     role = relationship("Role", back_populates="users")
+    school = relationship("School", back_populates="users")
     teacher = relationship("Teacher", back_populates="user", uselist=False, cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user")
 
@@ -56,6 +74,7 @@ class Teacher(Base):
 class Parent(Base):
     __tablename__ = "parents"
     id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     father_name = Column(String(100))
     father_mobile = Column(String(20))
     mother_name = Column(String(100))
@@ -64,21 +83,25 @@ class Parent(Base):
     guardian_mobile = Column(String(20), nullable=True)
     emergency_contact = Column(String(20), nullable=True)
     
+    school = relationship("School", back_populates="parents")
     students = relationship("Student", back_populates="parent")
 
 class RfidCard(Base):
     __tablename__ = "rfid_cards"
     id = Column(Integer, primary_key=True, index=True)
     uid = Column(String(50), unique=True, nullable=False, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     status = Column(String(20), default="active")  # active, deactivated
     assigned_at = Column(DateTime, default=datetime.utcnow)
     last_scanned_at = Column(DateTime, nullable=True)
     
+    school = relationship("School", back_populates="rfid_cards")
     student = relationship("Student", back_populates="rfid_card", uselist=False)
 
 class Student(Base):
     __tablename__ = "students"
     id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     admission_number = Column(String(50), unique=True, nullable=False, index=True)
     roll_number = Column(String(50))
     name = Column(String(100), nullable=False, index=True)
@@ -93,6 +116,7 @@ class Student(Base):
     status = Column(String(20), default="active")  # active, blocked, inactive
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    school = relationship("School", back_populates="students")
     parent = relationship("Parent", back_populates="students")
     rfid_card = relationship("RfidCard", back_populates="student")
     call_logs = relationship("CallLog", back_populates="student", cascade="all, delete-orphan")
@@ -103,6 +127,7 @@ class Device(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String(100), unique=True, nullable=False, index=True)  # unique ESP32 id
     name = Column(String(100), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="SET NULL"), nullable=True)
     ip_address = Column(String(50))
     mac_address = Column(String(50))
     location = Column(String(100))
@@ -115,11 +140,13 @@ class Device(Base):
     status = Column(String(20), default="offline")   # online, offline
     current_status_message = Column(String(100), default="RFID Waiting") # RFID Waiting, Card Scanned, Calling, Connected, Call Ended, Offline
     
+    school = relationship("School", back_populates="devices")
     call_logs = relationship("CallLog", back_populates="device")
 
 class CallLog(Base):
     __tablename__ = "call_logs"
     id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
     parent_type = Column(String(20), nullable=False)  # father, mother, guardian
     phone_number = Column(String(20), nullable=False)
@@ -131,6 +158,7 @@ class CallLog(Base):
     status = Column(String(20), default="started")  # started, connected, completed, failed, rejected, missed
     reason = Column(String(255), nullable=True)    # low_signal, no_answer, hung_up, busy, error
     
+    school = relationship("School", back_populates="call_logs")
     student = relationship("Student", back_populates="call_logs")
     teacher = relationship("Teacher", back_populates="call_logs")
     device = relationship("Device", back_populates="call_logs")
@@ -149,6 +177,7 @@ class Attendance(Base):
 class Setting(Base):
     __tablename__ = "settings"
     id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True, unique=True)
     school_name = Column(String(255), default="Smart Parent Calling School")
     logo_url = Column(String(255), nullable=True)
     working_hours_start = Column(String(20), default="08:00")
@@ -159,13 +188,18 @@ class Setting(Base):
     allowed_calling_time_start = Column(String(20), default="08:00")
     allowed_calling_time_end = Column(String(20), default="16:00")
 
+    school = relationship("School", back_populates="settings")
+
 class Notification(Base):
     __tablename__ = "notifications"
     id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True)
     type = Column(String(50), nullable=False)  # call_failed, sim_balance_low, device_offline, rfid_error, student_blocked
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    school = relationship("School", back_populates="notifications")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

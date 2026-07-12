@@ -13,10 +13,18 @@ router = APIRouter()
 @router.get("/", response_model=List[ParentOut])
 def read_parents(
     query: Optional[str] = None,
+    school_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
+    target_school_id = school_id
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
     db_query = db.query(db_crud.Parent)
+    if target_school_id is not None:
+        db_query = db_query.filter(db_crud.Parent.school_id == target_school_id)
+        
     if query:
         db_query = db_query.filter(
             or_(
@@ -34,7 +42,15 @@ def read_parent(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
-    parent = db.query(db_crud.Parent).filter(db_crud.Parent.id == parent_id).first()
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q = db.query(db_crud.Parent).filter(db_crud.Parent.id == parent_id)
+    if target_school_id is not None:
+        q = q.filter(db_crud.Parent.school_id == target_school_id)
+        
+    parent = q.first()
     if not parent:
         raise HTTPException(status_code=404, detail="Parent record not found")
     return parent
@@ -46,7 +62,15 @@ def update_parent(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin", "Teacher"]))
 ) -> Any:
-    parent = db.query(db_crud.Parent).filter(db_crud.Parent.id == parent_id).first()
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q = db.query(db_crud.Parent).filter(db_crud.Parent.id == parent_id)
+    if target_school_id is not None:
+        q = q.filter(db_crud.Parent.school_id == target_school_id)
+
+    parent = q.first()
     if not parent:
         raise HTTPException(status_code=404, detail="Parent not found")
         

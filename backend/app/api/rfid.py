@@ -15,10 +15,17 @@ router = APIRouter()
 @router.get("/", response_model=List[RfidCardOut])
 def read_rfid_cards(
     status: Optional[str] = None,
+    school_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ) -> Any:
+    target_school_id = school_id
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
     query = db.query(db_crud.RfidCard)
+    if target_school_id is not None:
+        query = query.filter(db_crud.RfidCard.school_id == target_school_id)
     if status:
         query = query.filter(db_crud.RfidCard.status == status)
     return query.all()
@@ -34,12 +41,21 @@ async def scan_rfid(
     if not uid or not device_id:
         raise HTTPException(status_code=400, detail="Missing uid or device_id")
         
+    # Resolve scanner device school_id
+    device = db.query(db_crud.Device).filter(db_crud.Device.device_id == device_id).first()
+    school_id = device.school_id if device else None
+
     # 1. Update card scan timestamp
     card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == uid).first()
     if not card:
         # Save card as unassigned so admin can easily assign it
-        card = db_crud.create_rfid_card(db, uid=uid)
-        
+        card = db_crud.create_rfid_card(db, uid=uid, school_id=school_id)
+    else:
+        # Bind unallocated card to device's school if not set
+        if not card.school_id and school_id:
+            card.school_id = school_id
+            db.commit()
+         
     card.last_scanned_at = datetime.utcnow()
     db.commit()
     
@@ -47,7 +63,6 @@ async def scan_rfid(
     student = db.query(db_crud.Student).filter(db_crud.Student.rfid_card_id == card.id).first()
     
     # Update device state
-    device = db.query(db_crud.Device).filter(db_crud.Device.device_id == device_id).first()
     if device:
         device.last_seen = datetime.utcnow()
         device.status = "online"
@@ -55,7 +70,7 @@ async def scan_rfid(
     if not student:
         # Create RFID error notification
         msg = f"Unknown RFID Card scanned: UID {uid} at Device {device_id}"
-        db_crud.create_notification(db, notif_type="rfid_error", message=msg)
+        db_crud.create_notification(db, notif_type="rfid_error", message=msg, school_id=school_id)
         if device:
             device.current_status_message = "RFID Error"
             db.commit()
@@ -74,7 +89,7 @@ async def scan_rfid(
     if student.status == "blocked":
         # Create student blocked notification
         msg = f"Blocked student {student.name} tried to scan RFID card at Device {device_id}"
-        db_crud.create_notification(db, notif_type="student_blocked", message=msg)
+        db_crud.create_notification(db, notif_type="student_blocked", message=msg, school_id=school_id)
         if device:
             device.current_status_message = "Student Blocked"
             db.commit()
@@ -144,14 +159,25 @@ def assign_rfid(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ):
-    student = db.query(db_crud.Student).filter(db_crud.Student.id == req.student_id).first()
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q_stud = db.query(db_crud.Student).filter(db_crud.Student.id == req.student_id)
+    if target_school_id is not None:
+        q_stud = q_stud.filter(db_crud.Student.school_id == target_school_id)
+    student = q_stud.first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
         
     # Find or create card
     card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == req.rfid_uid).first()
     if not card:
-        card = db_crud.create_rfid_card(db, uid=req.rfid_uid)
+        card = db_crud.create_rfid_card(db, uid=req.rfid_uid, school_id=student.school_id)
+    else:
+        # Enforce same school mapping constraints
+        if target_school_id is not None and card.school_id != target_school_id:
+            raise HTTPException(status_code=403, detail="RFID Card belongs to another school context")
         
     if card.status != "active":
         raise HTTPException(status_code=400, detail="RFID Card is deactivated")
@@ -172,7 +198,14 @@ def deactivate_rfid(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ):
-    card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == uid).first()
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q_card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.uid == uid)
+    if target_school_id is not None:
+        q_card = q_card.filter(db_crud.RfidCard.school_id == target_school_id)
+    card = q_card.first()
     if not card:
         raise HTTPException(status_code=404, detail="RFID Card not found")
         
@@ -188,11 +221,20 @@ def deactivate_rfid(
 
 @router.get("/scan-history")
 def read_scan_history(
+    school_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_active_user)
 ):
-    # Fetch all attendances (which are created by RFID scans)
-    history = db.query(db_crud.Attendance).order_by(db_crud.Attendance.check_in_time.desc()).limit(100).all()
+    target_school_id = school_id
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    # Fetch all attendances (which are created by RFID scans) scoped to school
+    q = db.query(db_crud.Attendance).join(db_crud.Student)
+    if target_school_id is not None:
+        q = q.filter(db_crud.Student.school_id == target_school_id)
+        
+    history = q.order_by(db_crud.Attendance.check_in_time.desc()).limit(100).all()
     results = []
     for h in history:
         card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == h.scan_id).first() if h.scan_id else None
@@ -213,11 +255,14 @@ def update_rfid_card(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
-    """
-    Update RFID Card parameters (UID or status).
-    If status is set to deactivated, unassign from student.
-    """
-    card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id).first()
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q_card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id)
+    if target_school_id is not None:
+        q_card = q_card.filter(db_crud.RfidCard.school_id == target_school_id)
+    card = q_card.first()
     if not card:
         raise HTTPException(status_code=404, detail="RFID Card not found")
         
@@ -248,9 +293,6 @@ def delete_rfid_card(
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(check_role(["Super Admin"]))
 ) -> Any:
-    """
-    Delete / deregister an RFID card completely.
-    """
     card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="RFID Card not found")
