@@ -2,6 +2,7 @@
 #include <MFRC522.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include "display.h"
 #include "sim7670.h"
 #include "students.h"
@@ -436,10 +437,12 @@ void connectToWiFi() {
  * @brief Registers this gate device with the Coolify backend.
  */
 void registerDeviceWithBackend() {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/device/register";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     String payload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"name\":\"" + String(DEVICE_NAME) + "\",\"ip_address\":\"" + WiFi.localIP().toString() + "\",\"location\":\"School Main Entrance\",\"classroom\":\"Foyer\"}";
@@ -463,10 +466,12 @@ void registerDeviceWithBackend() {
  * @brief Transmit telemetry heartbeat pin.
  */
 void sendHeartbeat(const String& statusMessage) {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/device/heartbeat";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     String payload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"battery_status\":95,\"wifi_signal\":" + String(WiFi.RSSI()) + ",\"sim_network\":\"SIM7670 LTE\",\"current_status_message\":\"" + statusMessage + "\"}";
@@ -479,10 +484,12 @@ void sendHeartbeat(const String& statusMessage) {
  * @brief Query live RFID scan verification endpoint.
  */
 bool queryRFIDScan(const String& uid) {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/rfid/scan";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     String payload = "{\"uid\":\"" + uid + "\",\"device_id\":\"" + String(DEVICE_ID) + "\"}";
@@ -523,10 +530,12 @@ bool queryRFIDScan(const String& uid) {
  * @brief Log call initialized.
  */
 void logCallStart(const String& parentType) {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/call/start";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     String payload = "{\"rfid_uid\":\"" + activeUid + "\",\"device_id\":\"" + String(DEVICE_ID) + "\",\"parent_type\":\"" + parentType + "\"}";
@@ -547,10 +556,12 @@ void logCallStart(const String& parentType) {
 void logCallConnected() {
     if (activeCallId.length() == 0) return;
     
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/call/connected";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     String payload = "{\"call_id\":" + activeCallId + "}";
@@ -565,10 +576,12 @@ void logCallConnected() {
 void logCallEnd(const String& reason) {
     if (activeCallId.length() == 0) return;
     
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String url = String(API_BASE_URL) + "/call/end";
     
-    http.begin(url);
+    http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     
     uint32_t duration = (millis() - callStartTimer) / 1000;
