@@ -9,14 +9,11 @@ from app.api.auth import check_role
 
 router = APIRouter()
 
-# Allow Super Admin & School Admin
-admin_role_dependency = Depends(check_role(["Super Admin", "School Admin"]))
-
 @router.get("/", response_model=List[UserOut])
 def read_users(
     school_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(admin_role_dependency)
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
     # Resolve target school scope
     target_school_id = school_id
@@ -28,7 +25,7 @@ def read_users(
 def create_user(
     user_in: UserCreate,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(admin_role_dependency)
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
     # Restrict role creations by School Admins
     if current_user.role.name != "Super Admin":
@@ -55,7 +52,7 @@ def update_user(
     user_id: int,
     user_in: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(admin_role_dependency)
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
     user = db_crud.get_user_by_id(db, user_id=user_id)
     if not user:
@@ -93,7 +90,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(admin_role_dependency)
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
     if current_user.id == user_id:
         raise HTTPException(
