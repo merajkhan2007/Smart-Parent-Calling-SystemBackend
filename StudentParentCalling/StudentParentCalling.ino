@@ -63,7 +63,7 @@ uint32_t callStartTimer = 0;
 const uint32_t STATUS_CHECK_INTERVAL = 30000; // Check cellular status every 30 seconds
 const uint32_t HEARTBEAT_INTERVAL    = 30000; // Send heartbeat to dashboard every 30 seconds
 const uint32_t VERIFY_DELAY          = 2000;  // Show card verified screen for 2s
-const uint32_t CALL_DURATION         = 20000; // Maintain parent call for 20s
+const uint32_t CALL_DURATION         = 180000; // Maintain parent call for 3 minutes (180s)
 const uint32_t COMPLETED_DELAY       = 3000;  // Show call completed screen for 3s
 const uint32_t DENIED_DELAY          = 3000;  // Show access denied screen for 3s
 
