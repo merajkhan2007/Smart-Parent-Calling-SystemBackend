@@ -291,9 +291,20 @@ def update_rfid_card(
 def delete_rfid_card(
     card_id: int,
     db: Session = Depends(get_db),
-    current_user: UserOut = Depends(check_role(["Super Admin"]))
+    current_user: UserOut = Depends(check_role(["Super Admin", "School Admin"]))
 ) -> Any:
-    card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id).first()
+    """
+    Delete / deregister an RFID card completely.
+    """
+    target_school_id = None
+    if current_user.role.name != "Super Admin":
+        target_school_id = current_user.school_id
+
+    q_card = db.query(db_crud.RfidCard).filter(db_crud.RfidCard.id == card_id)
+    if target_school_id is not None:
+        q_card = q_card.filter(db_crud.RfidCard.school_id == target_school_id)
+        
+    card = q_card.first()
     if not card:
         raise HTTPException(status_code=404, detail="RFID Card not found")
         
